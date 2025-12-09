@@ -1,67 +1,100 @@
-import os, asyncio
+import os
+import asyncio
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton,
-ChatJoinRequest
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ChatJoinRequest,
+)
+
+# ── env ──────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not set in environment variables")
+
+# опциональные айди каналов (если используешь)
 RU_CHAT_ID = int(os.getenv("RU_CHAT_ID", "0"))
 ES_CHAT_ID = int(os.getenv("ES_CHAT_ID", "0"))
+
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
-def kb_lang():
-return InlineKeyboardMarkup(inline_keyboard=[
-[InlineKeyboardButton(text="Войти в канал 🇷🇺 ", callback_data="join_ru")],
-[InlineKeyboardButton(text="Entrar al canal 🇪🇸 ", callback_data="join_es")]
-])
+
+
+# ── клавиатура ───────────────────────────────────────────────────────────────
+def kb_lang() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Войти в канал 🇷🇺", callback_data="join_ru")],
+            [InlineKeyboardButton(text="Entrar al canal 🇪🇸", callback_data="join_es")],
+        ]
+    )
+
+
+# ── handlers ────────────────────────────────────────────────────────────────
 @dp.message(Command("start"))
 async def start(m: Message):
-await m.answer("Привет! Выбери канал/язык 👇 \nHola! Elige tu canal/idioma 👇 ",
-reply_markup=kb_lang())
-@dp.callback_query(F.data=="join_ru")
+    await m.answer(
+        "Привет! Выбери канал/язык 👇\n¡Hola! Elige tu canal/idioma 👇",
+        reply_markup=kb_lang(),
+    )
+
+
+@dp.callback_query(F.data == "join_ru")
 async def join_ru(cq):
-await cq.answer()
-проверки.")
-await cq.message.answer("Подай заявку на вступление в RU-канал — бот одобрит после
-@dp.callback_query(F.data=="join_es")
+    # короткий ответ во всплывающем уведомлении
+    await cq.answer("Подача заявки принята, ожидайте проверки.", show_alert=False)
+    # сообщение в чат запроса (если хочешь)
+    await cq.message.answer("Подай заявку на вступление в RU-канал — бот одобрит после проверки.")
+
+
+@dp.callback_query(F.data == "join_es")
 async def join_es(cq):
-await cq.answer()
-await cq.message.answer("Envía solicitud al canal ES — el bot aprobará tras la verificación.")
+    await cq.answer("Solicitud enviada, espera la verificación.", show_alert=False)
+    await cq.message.answer("Envia solicitud al canal ES — el bot aprobará tras la verificación.")
+
+
+# автоапрув запросов на вступление (бот должен быть админом канала)
 @dp.chat_join_request()
 async def on_join(r: ChatJoinRequest):
-try:
-await r.approve()
-await bot.send_message(r.from_user.id, "Доступ одобрен ✅ except Exception as e:
-print("join error:", e)
-Добро пожаловать!")
+    try:
+        await r.approve()
+        await bot.send_message(
+            r.from_user.id,
+            "Доступ одобрен ✅\nДобро пожаловать!"
+        )
+    except Exception as e:
+        print("join error:", e)
+
+
+# ── entrypoint ───────────────────────────────────────────────────────────────
 async def main():
-await dp.start_polling(bot)
+    await dp.start_polling(bot)
+
+
 if __name__ == "__main__":
-asyncio.run(main())
-# --- keep-alive HTTP server for Render ---
-import os, threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+    # запускаем keep-alive HTTP, чтобы Render не “усыплял” сервис
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
 
-class _HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
+    class _HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"OK")
+            else:
+                self.send_response(404)
+                self.end_headers()
 
-def _run_health_server():
-    port = int(os.getenv("PORT", "10000"))
-    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
-    server.serve_forever()
+    def _run_health_server():
+        port = int(os.getenv("PORT", "10000"))
+        server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+        server.serve_forever()
 
-# Запускаем веб-сервер в фоне
-threading.Thread(target=_run_health_server, daemon=True).start()
+    threading.Thread(target=_run_health_server, daemon=True).start()
 
-# --- запускаем бота как обычно ---
-# aiogram:
-# executor.start_polling(dp, skip_updates=True)
-# python-telegram-bot v20+:
-# application.run_polling()
+    asyncio.run(main())
