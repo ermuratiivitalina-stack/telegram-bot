@@ -68,12 +68,6 @@ async def on_join(r: ChatJoinRequest):
     except Exception as e:
         print("join error:", e)
 
-
-# ── entrypoint ───────────────────────────────────────────────────────────────
-async def main():
-    await dp.start_polling(bot)
-
-
 if __name__ == "__main__":
     # запускаем keep-alive HTTP, чтобы Render не “усыплял” сервис
     import threading
@@ -89,7 +83,6 @@ if __name__ == "__main__":
             else:
                 self.send_response(404)
                 self.end_headers()
-await bot.delete_webhook(drop_pending_updates=True)
 
     def _run_health_server():
         port = int(os.getenv("PORT", "10000"))
@@ -98,8 +91,6 @@ await bot.delete_webhook(drop_pending_updates=True)
 
     threading.Thread(target=_run_health_server, daemon=True).start()
 
-   async def main():
-    # Удаляем webhook, чтобы не было конфликта с polling
+  async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
-
