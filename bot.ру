@@ -89,6 +89,7 @@ if __name__ == "__main__":
             else:
                 self.send_response(404)
                 self.end_headers()
+await bot.delete_webhook(drop_pending_updates=True)
 
     def _run_health_server():
         port = int(os.getenv("PORT", "10000"))
