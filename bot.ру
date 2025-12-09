@@ -10,12 +10,11 @@ from aiogram.types import (
     ChatJoinRequest,
 )
 
-# ── env ──────────────────────────────────────────────────────────────────────
+# --- env ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment variables")
 
-# опциональные айди каналов (если используешь)
 RU_CHAT_ID = int(os.getenv("RU_CHAT_ID", "0"))
 ES_CHAT_ID = int(os.getenv("ES_CHAT_ID", "0"))
 
@@ -23,7 +22,7 @@ bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 
-# ── клавиатура ───────────────────────────────────────────────────────────────
+# --- клавиатура ---
 def kb_lang() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -33,7 +32,7 @@ def kb_lang() -> InlineKeyboardMarkup:
     )
 
 
-# ── handlers ────────────────────────────────────────────────────────────────
+# --- handlers ---
 @dp.message(Command("start"))
 async def start(m: Message):
     await m.answer(
@@ -44,53 +43,58 @@ async def start(m: Message):
 
 @dp.callback_query(F.data == "join_ru")
 async def join_ru(cq):
-    # короткий ответ во всплывающем уведомлении
     await cq.answer("Подача заявки принята, ожидайте проверки.", show_alert=False)
-    # сообщение в чат запроса (если хочешь)
     await cq.message.answer("Подай заявку на вступление в RU-канал — бот одобрит после проверки.")
 
 
 @dp.callback_query(F.data == "join_es")
 async def join_es(cq):
     await cq.answer("Solicitud enviada, espera la verificación.", show_alert=False)
-    await cq.message.answer("Envia solicitud al canal ES — el bot aprobará tras la verificación.")
+    await cq.message.answer("Envía solicitud al canal ES — el bot aprobará tras la verificación.")
 
 
-# автоапрув запросов на вступление (бот должен быть админом канала)
 @dp.chat_join_request()
 async def on_join(r: ChatJoinRequest):
     try:
         await r.approve()
         await bot.send_message(
             r.from_user.id,
-            "Доступ одобрен ✅\nДобро пожаловать!"
+            "Доступ одобрен ✅\nДобро пожаловать!",
         )
     except Exception as e:
         print("join error:", e)
 
-if __name__ == "__main__":
-    # запускаем keep-alive HTTP, чтобы Render не “усыплял” сервис
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
 
-    class _HealthHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/health":
-                self.send_response(200)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(b"OK")
-            else:
-                self.send_response(404)
-                self.end_headers()
+# --- keep-alive для Render ---
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-    def _run_health_server():
-        port = int(os.getenv("PORT", "10000"))
-        server = HTTPServer(("0.0.0.0", port), _HealthHandler)
-        server.serve_forever()
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-    threading.Thread(target=_run_health_server, daemon=True).start()
 
-  async def main():
+def _run_health_server():
+    port = int(os.getenv("PORT", "10000"))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    server.serve_forever()
+
+threading.Thread(target=_run_health_server, daemon=True).start()
+
+
+# --- запуск бота ---
+async def main():
+    # Удаляем webhook, чтобы не было конфликта с polling
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
