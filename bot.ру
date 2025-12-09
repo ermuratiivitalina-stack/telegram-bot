@@ -98,4 +98,8 @@ await bot.delete_webhook(drop_pending_updates=True)
 
     threading.Thread(target=_run_health_server, daemon=True).start()
 
-    asyncio.run(main())
+   async def main():
+    # Удаляем webhook, чтобы не было конфликта с polling
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
