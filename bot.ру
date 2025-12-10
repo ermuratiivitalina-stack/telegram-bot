@@ -31,16 +31,20 @@ CHANNEL_LINKS: Dict[str, str] = {
     "es": "https://t.me/+HPXk4hRDxpMWpWQ0",
 }
 
-# Render / Webhook settings
-MODE = os.getenv("MODE", "").lower()  # "webhook" или пусто
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()  # полный https URL до вебхука
-WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", f"/webhook/{BOT_TOKEN}")  # путь на сервисе
+# Режимы запуска:
+# - По умолчанию (ничего не задавать): POLLING (лучше всего для Render Background Worker)
+# - Если нужно webhook: MODE=webhook и см. блок настроек ниже
+MODE = os.getenv("MODE", "").lower()  # "" | "webhook"
+
+# Параметры вебхука (используются только если MODE=webhook)
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()  # Полный публичный https URL
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", f"/webhook/{BOT_TOKEN}")
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.getenv("PORT", "10000"))  # Render пробрасывает PORT
-SECRET_TOKEN = os.getenv("SECRET_TOKEN", "")  # опционально: секрет для Telegram Webhook
+WEBAPP_PORT = int(os.getenv("PORT", "10000"))
+SECRET_TOKEN = os.getenv("SECRET_TOKEN", "")  # опционально
 
 # ======================
-# Texts
+# Тексты
 # ======================
 FAQ_RU = (
     "💬 Часто задаваемые вопросы\n\n"
@@ -71,7 +75,7 @@ FAQ_ES = (
 )
 
 # ======================
-# State
+# Состояние (in-memory)
 # ======================
 user_data: Dict[int, Dict] = {}
 
@@ -79,7 +83,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 # ======================
-# Keyboards
+# Клавиатуры
 # ======================
 def lang_keyboard() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
@@ -106,7 +110,7 @@ def faq_keyboard(lang: str) -> InlineKeyboardMarkup:
     ])
 
 # ======================
-# Handlers
+# Хендлеры
 # ======================
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: Message):
@@ -161,8 +165,8 @@ async def check_payment_screenshot(message: Message):
     user_id = message.from_user.id
     lang = user_data.get(user_id, {}).get("lang", "ru")
 
-    file = await bot.get_file(message.photo[-1].file_id)
-    file_path = file.file_path
+    tg_file = await bot.get_file(message.photo[-1].file_id)
+    file_path = tg_file.file_path
 
     ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     tmp_path = f"screenshot_{user_id}_{ts}.jpg"
@@ -199,22 +203,16 @@ async def check_payment_screenshot(message: Message):
         await message.answer(fail_text)
 
 # ======================
-# Webhook lifecycle (Render)
+# Webhook (если захочешь)
 # ======================
 async def on_startup_webhook(dp: Dispatcher):
-    # Полный URL = WEBHOOK_URL или <RENDER_EXTERNAL_URL> + WEBHOOK_PATH
     url = WEBHOOK_URL
     if not url:
-        # Render предоставляет RENDER_EXTERNAL_URL (например, https://my-app.onrender.com)
         base = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
         if not base:
             raise RuntimeError("Set WEBHOOK_URL or RENDER_EXTERNAL_URL for webhook mode")
         url = f"{base}{WEBHOOK_PATH}"
-
-    await bot.set_webhook(
-        url,
-        secret_token=(SECRET_TOKEN or None)  # если задан, Telegram будет присылать заголовок X-Telegram-Bot-Api-Secret-Token
-    )
+    await bot.set_webhook(url, secret_token=(SECRET_TOKEN or None))
 
 async def on_shutdown_webhook(dp: Dispatcher):
     await bot.delete_webhook()
@@ -223,10 +221,7 @@ async def on_shutdown_webhook(dp: Dispatcher):
 # Entrypoint
 # ======================
 if __name__ == "__main__":
-    use_webhook = (MODE == "webhook") or bool(WEBHOOK_URL) or bool(os.getenv("RENDER"))
-    if use_webhook:
-        # Вебхук для Render Web Service
-        # executor сам поднимет aiohttp-сервер и повесит хэндлер на WEBHOOK_PATH
+    if MODE == "webhook":
         executor.start_webhook(
             dispatcher=dp,
             webhook_path=WEBHOOK_PATH,
@@ -237,5 +232,4 @@ if __name__ == "__main__":
             port=WEBAPP_PORT,
         )
     else:
-        # Локальная разработка (polling)
         executor.start_polling(dp, skip_updates=True)
