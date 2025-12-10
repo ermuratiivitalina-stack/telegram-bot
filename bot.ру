@@ -137,4 +137,5 @@ async def photo_stub(message: Message):
 
 # ========= Entrypoint =========
 if __name__ == "__main__":
+    print("Starting polling…")  # подсказка в логах
     executor.start_polling(dp, skip_updates=True)
