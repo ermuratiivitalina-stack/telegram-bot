@@ -16,7 +16,10 @@ dp = Dispatcher()
 
 # In-memory user data (for demo only, replace with DB or JSON in real case)
 user_data = {}
-CHANNEL_LINK = "https://t.me/your_private_channel"
+CHANNEL_LINKS = {
+    "ru": "https://t.me/+bePV7UZ8zdwxOWU0",
+    "es": "https://t.me/+HPXk4hRDxpMwYWQ0"
+}
 PAYPAL_URL = "https://paypal.me/yourlink"
 ADMIN_USERNAME = "Linavibeart"
 
@@ -58,7 +61,7 @@ async def set_language(callback: CallbackQuery):
         "subscription_expires": None
     }
     greeting = {
-        "ru": "👋 Привет! Я — помощник Лины 😊\nРад, что ты здесь — осталось совсем нем043d043eг043e, чтобы попасть в закрытое сообщество, гд0435 учатс044f с043d0438м0430т044c в0438д0435043e и ф043eт043e, к043eт043e04400435 ц0435п043b044fю0442 🎥✨\n\nВн0443т04400438 т0435б044f жд0451т:\n✅ П043e04340440043e0431043d044b0435 р0430з0431043e0440044b п044004350434043c04350442043d044b0445 в043804340435043e\n✅ К04400443043f043d044b0435 р04350430043b044c043d044b0435 п0440043e0435043a0442044b\n✅ П04400430043a04420438044704350441к04380435 с043e043204350442044b п043e с044a0451м043a0435 и с04320435т0443\n✅ М0438043d0438-ур043e043a0438 и п043e043b04350437043d044b0435 «п043b044e0448043a0438»\n✅ Р0430з0431043e0440044b в043804340435043e р04300437043d043e0439 с043b043e0436043d043e044104420438 — о0442 п0440043e04410442044b0445 д043e п0440043e043404320438043d04430442044b0445\n\n💰 П043e0434043f0438ск0430 — в0441ег043e 15 ев0440043e в м04350441044f0446\nП043e0441043b0435 о043f043b04300442044b т044b с0440043004370443 п043e043b0443ч0438ш044c д043e044104420443043f в з0430к0440ыт044b0439 к0430043d0430043b с у0440043e043a0430043c0438 и м0430т0435044004380430043b0430043c0438 🔐\n\n🚀 Г043e0442043e0432 н0430044704300442044c? К043d043e043f043a0438 н043804360435 👇",
+        "ru": "👋 Привет! Я — помощник Лины 😊\nРад, что ты здесь — осталось совсем немного, чтобы попасть в закрытое сообщество, где учатся снимать видео и фото, которые цепляют 🎥✨\n\nВнутри тебя ждёт:\n✅ Подробные разборы предметных видео\n✅ Крупные реальные проекты\n✅ Практические советы по съёмке и свету\n✅ Мини-уроки и полезные «плюшки»\n✅ Разборы видео разной сложности — от простых до продвинутых\n\n💰 Подписка — всего 15 евро в месяц\nПосле оплаты ты сразу получишь доступ в закрытый канал с уроками и материалами 🔒\n\n🚀 Готов начать? Кнопки ниже 👇",
         "es": "👋 ¡Hola! Soy el asistente de Lina. Accede al canal privado con contenido exclusivo. ¡Haz clic en los botones abajo!"
     }.get(lang, "👋 Welcome! Click the buttons below to continue.")
     await callback.message.answer(greeting, reply_markup=main_menu("en" if lang == "es" else "ru"))
@@ -70,8 +73,8 @@ async def send_video(callback: CallbackQuery):
     lang = user_data.get(callback.from_user.id, {}).get("lang", "en")
     video = FSInputFile("video.mp4")  # must be present in project directory
     caption = {
-        "ru": "🎥 Пр043e0441043c043e044204400438 п044004350432044cю н043004480435г043e к0430043d0430043b0430.",
-        "es": "🎥 Mira una vista previa del canal.",
+        "ru": "🎥 Просмотри превью нашего канала.",
+        "es": "🎥 Mira una vista previa del canal."
     }.get(lang, "🎥 Watch a preview of our channel.")
     await callback.message.answer_video(video=video, caption=caption, reply_markup=after_video_keyboard(lang))
     await callback.answer()
@@ -79,8 +82,30 @@ async def send_video(callback: CallbackQuery):
 # Pay button
 dp.callback_query(F.data == "pay")
 async def pay_step(callback: CallbackQuery):
-    await callback.message.answer(f"Please proceed to payment: {PAYPAL_URL}\nAfter payment, send a screenshot to @{ADMIN_USERNAME} to get access.")
+    user_id = callback.from_user.id
+    lang = user_data.get(user_id, {}).get("lang", "ru")
+    user_data[user_id]["subscribed"] = True
+    user_data[user_id]["subscription_expires"] = datetime.utcnow() + timedelta(days=30)
+
+    await callback.message.answer(f"✅ Спасибо за оплату!\nВот ссылка на закрытый канал: {CHANNEL_LINKS[lang]}\n\nНапоминание о продлении придёт за 3 дня до окончания подписки.")
     await callback.answer()
 
+# Daily subscription check (to be called daily via scheduler)
+async def check_subscriptions():
+    now = datetime.utcnow()
+    for user_id, info in user_data.items():
+        if info["subscribed"] and info["subscription_expires"]:
+            days_left = (info["subscription_expires"] - now).days
+            if days_left == 3:
+                try:
+                    await bot.send_message(user_id, "⏳ Напоминаем: через 3 дня заканчивается подписка. Хотите продлить?")
+                except:
+                    pass
+
 # Run bot
-async
+async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
