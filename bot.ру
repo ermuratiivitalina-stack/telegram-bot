@@ -4,7 +4,13 @@ from datetime import datetime, timedelta
 from typing import Dict
 
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message, ContentType
+from aiogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    Message,
+    ContentType,
+)
 
 from PIL import Image
 import pytesseract
@@ -16,41 +22,38 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("Environment variable BOT_TOKEN is not set")
 
-# Single PayPal URL used for both languages (replace with your own)
-PAYPAL_URL = os.getenv("PAYPAL_URL", "https://www.paypal.com/qrcodes/p2pqr/3MVJCABCAVKN6")
+# Replace envs with your own if needed
+PAYPAL_URL = os.getenv(
+    "PAYPAL_URL",
+    "https://www.paypal.com/qrcodes/p2pqr/3MVJCABCAVKN6"
+)
 SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/Linavibeart")
 
 CHANNEL_LINKS: Dict[str, str] = {
-    "ru": "https://t.me/+ebPVUZ8dzkwOWU8",  # RU channel invite link
-    "es": "https://t.me/+HPXk4hRDxpMWpWQ0",  # ES channel invite link
+    "ru": "https://t.me/+ebPVUZ8dzkwOWU8",   # RU channel invite link
+    "es": "https://t.me/+HPXk4hRDxpMWpWQ0",   # ES channel invite link
 }
 
 # FAQ text (RU and ES). Keep it short enough for Telegram message limits.
 FAQ_RU = (
     "💬 Часто задаваемые вопросы\n\n"
-    "1) ⏳ Сколько действует доступ?\n"
-    "Подписка действует 1 месяц.\n\n"
-    "2) 📚 Есть ли в канале уже материалы?\n"
-    "Да, материалы уже есть и пополняются 3 раза в неделю.\n\n"
-    "3) 🛟 Есть ли обратная связь и поддержка?\n"
-    "Да, 2 раза в месяц открываю комментарии для вопросов.\n\n"
-    "4) 🔒 Что если не продлю вовремя?\n"
-    "Доступ временно приостанавливается. Восстановить можно, оформив продление.\n\n"
-    "5) 💳 Как оплатить/продлить?\n"
-    "Перед окончанием получите уведомление и сможете продлить удобным способом.\n\n"
-    "6) 💸 Можно ли вернуть деньги?\n"
-    "Возврат не предусмотрен, можно отменить продление.\n\n"
+    "1) ⏳ Сколько действует доступ? — 1 месяц.\n\n"
+    "2) 📚 Есть ли в канале уже материалы? — Да, пополняется 3 раза в неделю.\n\n"
+    "3) 🛟 Есть ли обратная связь? — Да, 2 раза в месяц открываю комментарии.\n\n"
+    "4) 🔒 Не продлил вовремя? — Доступ приостанавливается до продления.\n\n"
+    "5) 💳 Как оплатить/продлить? — Придёт уведомление перед окончанием периода.\n\n"
+    "6) 💸 Возврат? — Не предусмотрен, но можно отменить продление.\n\n"
     "7) 🧑‍🎓 Подходит ли канал новичкам? — Да, от новичков до продвинутых.\n\n"
     "8) ⏱️ Можно ли смотреть в удобное время? — Да, материалы остаются в канале.\n\n"
-    "9) ❗Не получил доступ после оплаты? — Напишите в поддержку.\n\n"
+    "9) ❗Не получил доступ после оплаты? — Напиши в поддержку.\n\n"
     "❓ Остались вопросы? Нажимай на кнопки ниже."
 )
 
 FAQ_ES = (
     "💬 Preguntas frecuentes\n\n"
     "1) ⏳ ¿Duración del acceso? — 1 mes.\n\n"
-    "2) 📚 ¿Hay contenido ya? — Sí, y se actualiza 3 veces por semana.\n\n"
-    "3) 🛟 ¿Hay soporte? — Sí, 2 veces al mes abro comentarios.\n\n"
+    "2) 📚 ¿Hay contenido ya? — Sí, se actualiza 3 veces por semana.\n\n"
+    "3) 🛟 ¿Hay soporte? — Sí, abro comentarios 2 veces al mes.\n\n"
     "4) 🔒 Si no renuevo a tiempo, el acceso se pausa hasta renovar.\n\n"
     "5) 💳 ¿Cómo pagar/renovar? — Recibirás un aviso antes de que termine el período.\n\n"
     "6) 💸 ¿Reembolso? — No, pero puedes cancelar la renovación.\n\n"
@@ -60,7 +63,7 @@ FAQ_ES = (
     "❓ ¿Más preguntas? Pulsa los botones abajo."
 )
 
-# In‑memory user data (simple demo; replace with DB in production)
+# In-memory user data (simple demo; replace with DB in production)
 user_data: Dict[int, Dict] = {}
 
 bot = Bot(token=BOT_TOKEN)
@@ -69,7 +72,6 @@ dp = Dispatcher(bot)
 # ----------------------
 # Keyboards
 # ----------------------
-
 def lang_keyboard() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:ru"))
@@ -100,12 +102,9 @@ def faq_keyboard(lang: str) -> InlineKeyboardMarkup:
 # ----------------------
 # Handlers
 # ----------------------
-
-@dp.message_handler(commands=["start"]) 
+@dp.message_handler(commands=["start"])
 async def cmd_start(message: Message):
-    await message.answer(
-        "Выбери язык / Elige el idioma:", reply_markup=lang_keyboard()
-    )
+    await message.answer("Выбери язык / Elige el idioma:", reply_markup=lang_keyboard())
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith("lang:"))
@@ -122,7 +121,7 @@ async def select_lang(callback: CallbackQuery):
             "✅ Подробные разборы предметных видео\n"
             "✅ Реальные проекты\n"
             "✅ Практические советы по съёмке и свету\n"
-            "✅ Мини‑уроки и полезные «плюшки»\n"
+            "✅ Мини-уроки и полезные «плюшки»\n"
             "💶 Подписка — всего 15 евро в месяц\n"
             "📦 После оплаты ты сразу получишь доступ в закрытый канал с уроками и материалами\n\n"
             "🚀 Готов начать? Кнопки ниже ⬇️"
@@ -135,7 +134,7 @@ async def select_lang(callback: CallbackQuery):
             "✅ Análisis detallado de videos\n"
             "✅ Proyectos reales\n"
             "✅ Consejos prácticos sobre iluminación\n"
-            "✅ Mini‑lecciones y bonus\n"
+            "✅ Mini-lecciones y bonus\n"
             "💶 Suscripción: solo 15 € al mes\n"
             "📦 Acceso al canal privado después del pago\n\n"
             "🚀 ¿Listo para empezar? Botones abajo ⬇️"
@@ -154,12 +153,12 @@ async def send_faq(callback: CallbackQuery):
     await callback.answer()
 
 
-@dp.message_handler(content_types=ContentType.PHOTO)
+@dp.message_handler(content_types=[ContentType.PHOTO])
 async def check_payment_screenshot(message: Message):
     user_id = message.from_user.id
     lang = user_data.get(user_id, {}).get("lang", "ru")
 
-    # Download the highest‑resolution photo
+    # Download the highest-resolution photo
     file = await bot.get_file(message.photo[-1].file_id)
     file_path = file.file_path
 
@@ -169,23 +168,29 @@ async def check_payment_screenshot(message: Message):
     await bot.download_file(file_path, tmp_path)
 
     try:
-        text = pytesseract.image_to_string(Image.open(tmp_path))
+        # Prefer multilingual OCR; fallback to ENG if some packs are missing
+        try:
+            text = pytesseract.image_to_string(Image.open(tmp_path), lang="eng+rus+spa")
+        except Exception:
+            text = pytesseract.image_to_string(Image.open(tmp_path), lang="eng")
     finally:
-        # Clean up
+        # Clean up temp file
         try:
             os.remove(tmp_path)
         except OSError:
             pass
 
+    # Basic multilingual keywords
     keywords = ["paypal", "15", "euro", "евро", "сумма", "платеж"]
 
     if any(k in text.lower() for k in keywords):
         # Mark subscription and send channel link
         user_data.setdefault(user_id, {})["subscribed"] = True
         user_data[user_id]["subscription_expires"] = datetime.utcnow() + timedelta(days=30)
+
         link = CHANNEL_LINKS.get(lang, list(CHANNEL_LINKS.values())[0])
         ok_text = (
-            "✅ Спасибо за оплату!\nВот ссылка на закрытый канал: " if lang == "ru" 
+            "✅ Спасибо за оплату!\nВот ссылка на закрытый канал: " if lang == "ru"
             else "✅ ¡Pago confirmado!\nEnlace al canal privado: "
         )
         await message.answer(ok_text + link)
