@@ -1,129 +1,131 @@
 import os
 import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
+from aiogram.filters import Command
 from aiogram.types import (
-    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ChatJoinRequest,
 )
-from aiogram.enums import ContentType
-from datetime import datetime, timedelta
-import pytesseract
-from PIL import Image
 
+# --- CONFIG ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set")
+RU_CHAT_ID = int(os.getenv("RU_CHAT_ID", "0"))
+ES_CHAT_ID = int(os.getenv("ES_CHAT_ID", "0"))
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
-# In-memory user data (for demo only, replace with DB or JSON in real case)
-user_data = {}
-CHANNEL_LINKS = {
-    "ru": "https://t.me/+bePV7UZ8zdwxOWU0",
-    "es": "https://t.me/+HPXk4hRDxpMwYWQ0"
-}
-PAYPAL_URL = "https://paypal.me/yourlink"
-ADMIN_USERNAME = "Linavibeart"
-
-# Language options
-def language_keyboard():
+# --- UI Keyboards ---
+def lang_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Русский", callback_data="lang_ru")],
-        [InlineKeyboardButton(text="Español", callback_data="lang_es")]
+        [InlineKeyboardButton(text="Russian 🇷🇺", callback_data="lang_ru")],
+        [InlineKeyboardButton(text="Español 🇪🇸", callback_data="lang_es")]
     ])
 
-# Start command
-dp.message(CommandStart())
-async def start(message: Message):
-    await message.answer("Please choose your language / Por favor, elige el idioma", reply_markup=language_keyboard())
-
-# Welcome keyboards
-def main_menu(lang):
-    text_pay = "💳 Pay" if lang == "en" else "Оплатить"
-    text_more = "ℹ️ Learn More" if lang == "en" else "Узнать больше"
+def payment_keyboard(lang):
+    if lang == "ru":
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Оплатить (PayPal)", url="https://paypal.me/yourlink")],
+            [InlineKeyboardButton(text="Оплатить на карту 💳", url="https://yourbanklink.com")],
+            [InlineKeyboardButton(text="Узнать больше", callback_data="more_ru")]
+        ])
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=text_pay, callback_data="pay")],
-        [InlineKeyboardButton(text=text_more, callback_data="more")]
+        [InlineKeyboardButton(text="Pagar (PayPal)", url="https://paypal.me/yourlink")],
+        [InlineKeyboardButton(text="Pagar con tarjeta 💳", url="https://yourbanklink.com")],
+        [InlineKeyboardButton(text="Saber más", callback_data="more_es")]
     ])
 
-# After video keyboard
-def after_video_keyboard(lang):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Pay", callback_data="pay")],
-        [InlineKeyboardButton(text="❓ Have questions?", url=f"https://t.me/{ADMIN_USERNAME}")]
-    ])
+# --- Handlers ---
+@dp.message(Command("start"))
+async def start_cmd(m: Message):
+    await m.answer("Choose language / Elige el idioma", reply_markup=lang_keyboard())
 
-# Language selection
-dp.callback_query(F.data.startswith("lang_"))
-async def set_language(callback: CallbackQuery):
-    lang = callback.data.split("_")[1]
-    user_data[callback.from_user.id] = {
-        "lang": lang,
-        "subscribed": False,
-        "subscription_expires": None
+@dp.callback_query(F.data.startswith("lang_"))
+async def select_lang(cq):
+    lang = cq.data.split("_")[1]
+    text = {
+        "ru": (
+            "\U0001F44B Привет! Я — помощник Лины \U0001F60A\n"
+            "Рад, что ты здесь — осталось совсем немного, чтобы попасть в закрытое сообщество, где учатся снимать видео и фото, которые цепляют \U0001F3A5✨\n\n"
+            "Внутри тебя ждёт:\n"
+            "✅ Подробные разборы предметных видео\n"
+            "✅ Крупные реальные проекты\n"
+            "✅ Советы по съёмке и свету\n"
+            "✅ Мини-уроки и полезные плюшки\n"
+            "✅ Видео от простых до продвинутых\n\n"
+            "💰 Подписка — всего 15 евро в месяц\n"
+            "После оплаты ты сразу получишь доступ в закрытый канал 🔒\n\n"
+            "🚀 Готов начать? Кнопки ниже 👇"
+        ),
+        "es": (
+            "\U0001F44B ¡Hola! Soy el asistente de Lina 😊\n"
+            "Ya casi estás dentro de la comunidad secreta para aprender a crear fotos y videos que impactan 🎥✨\n\n"
+            "Dentro encontrarás:\n"
+            "✅ Análisis detallados\n"
+            "✅ Proyectos reales\n"
+            "✅ Consejos sobre grabación y luz\n"
+            "✅ Mini lecciones y trucos\n"
+            "✅ Videos para todos los niveles\n\n"
+            "💰 Suscripción: solo 15 euros/mes\n"
+            "Acceso inmediato al canal cerrado tras el pago 🔒\n\n"
+            "🚀 ¿Listo para empezar? 👇"
+        )
     }
-    greeting = {
-        "ru": "👋 Привет! Я — помощник Лины 😊\nРад, что ты здесь — осталось совсем немного, чтобы попасть в закрытое сообщество, где учатся снимать видео и фото, которые цепляют 🎥✨\n\nВнутри тебя ждёт:\n✅ Подробные разборы предметных видео\n✅ Крупные реальные проекты\n✅ Практические советы по съёмке и свету\n✅ Мини-уроки и полезные «плюшки»\n✅ Разборы видео разной сложности — от простых до продвинутых\n\n💰 Подписка — всего 15 евро в месяц\nПосле оплаты ты сразу получишь доступ в закрытый канал с уроками и материалами 🔒\n\n🚀 Готов начать? Кнопки ниже 👇",
-        "es": "👋 ¡Hola! Soy el asistente de Lina. Accede al canal privado con contenido exclusivo. ¡Haz clic en los botones abajo!"
-    }.get(lang, "👋 Welcome! Click the buttons below to continue.")
-    await callback.message.answer(greeting, reply_markup=main_menu("en" if lang == "es" else "ru"))
-    await callback.answer()
+    await cq.message.answer(text[lang], reply_markup=payment_keyboard(lang))
+    await cq.answer()
 
-# Learn more (video)
-dp.callback_query(F.data == "more")
-async def send_video(callback: CallbackQuery):
-    lang = user_data.get(callback.from_user.id, {}).get("lang", "en")
-    video = FSInputFile("video.mp4")  # must be present in project directory
-    caption = {
-        "ru": "🎥 Просмотри превью нашего канала.",
-        "es": "🎥 Mira una vista previa del canal."
-    }.get(lang, "🎥 Watch a preview of our channel.")
-    await callback.message.answer_video(video=video, caption=caption, reply_markup=after_video_keyboard(lang))
-    await callback.answer()
-
-# Pay button
-dp.callback_query(F.data == "pay")
-async def pay_step(callback: CallbackQuery):
-    await callback.message.answer(f"Пожалуйста, отправьте скриншот с подтверждением оплаты сюда.\nИли воспользуйтесь ссылкой: {PAYPAL_URL}")
-    await callback.answer()
-
-# OCR check payment screenshot
-dp.message(F.photo)
-async def check_payment_screenshot(message: Message):
-    user_id = message.from_user.id
-    lang = user_data.get(user_id, {}).get("lang", "ru")
-
-    file = await bot.get_file(message.photo[-1].file_id)
-    filepath = file.file_path
-    saved_path = f"screenshot_{user_id}.jpg"
-    await bot.download_file(filepath, saved_path)
-
-    # OCR scan
-    text = pytesseract.image_to_string(Image.open(saved_path))
-    os.remove(saved_path)
-
-    keywords = ["paypal", "15", "eur", "евро", "успешно", "платеж"]
-    if any(k.lower() in text.lower() for k in keywords):
-        user_data[user_id]["subscribed"] = True
-        user_data[user_id]["subscription_expires"] = datetime.utcnow() + timedelta(days=30)
-        await message.answer(f"✅ Спасибо за оплату!\nВот ссылка на закрытый канал: {CHANNEL_LINKS[lang]}")
+@dp.callback_query(F.data.startswith("more_"))
+async def send_more(cq):
+    lang = cq.data.split("_")[1]
+    video_url = "https://example.com/your-private-video.mp4"  # Replace with actual
+    chat_link = "https://t.me/Linavibeart"
+    if lang == "ru":
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Оплатить", url="https://paypal.me/yourlink")],
+            [InlineKeyboardButton(text="Остались вопросы?", url=chat_link)]
+        ])
+        await cq.message.answer(f"Видео о закрытом канале: {video_url}", reply_markup=markup)
     else:
-        await message.answer("❌ Не удалось подтвердить оплату по изображению. Пожалуйста, убедитесь, что скриншот чёткий и содержит детали оплаты.")
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Pagar", url="https://paypal.me/yourlink")],
+            [InlineKeyboardButton(text="¿Dudas?", url=chat_link)]
+        ])
+        await cq.message.answer(f"Video del canal privado: {video_url}", reply_markup=markup)
+    await cq.answer()
 
-# Daily subscription check (to be called daily via scheduler)
-async def check_subscriptions():
-    now = datetime.utcnow()
-    for user_id, info in user_data.items():
-        if info["subscribed"] and info["subscription_expires"]:
-            days_left = (info["subscription_expires"] - now).days
-            if days_left == 3:
-                try:
-                    await bot.send_message(user_id, "⏳ Напоминаем: через 3 дня заканчивается подписка. Хотите продлить?")
-                except:
-                    pass
+@dp.chat_join_request()
+async def approve_user(r: ChatJoinRequest):
+    try:
+        await r.approve()
+        await bot.send_message(r.from_user.id, "✅ Доступ разрешён. Добро пожаловать!")
+        # TODO: Store user + datetime, then check after 30 days
+    except Exception as e:
+        print("Ошибка доступа:", e)
 
-# Run bot
+# --- Keep-alive for Render ---
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def _run_health_server():
+    port = int(os.getenv("PORT", "8080"))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    server.serve_forever()
+
+threading.Thread(target=_run_health_server, daemon=True).start()
+
+# --- Start ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
