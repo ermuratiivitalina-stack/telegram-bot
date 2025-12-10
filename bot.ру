@@ -1,100 +1,86 @@
 import os
 import asyncio
-
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import CommandStart
 from aiogram.types import (
-    Message,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    ChatJoinRequest,
+    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 )
+from datetime import datetime, timedelta
 
-# --- env ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set in environment variables")
-
-RU_CHAT_ID = int(os.getenv("RU_CHAT_ID", "0"))
-ES_CHAT_ID = int(os.getenv("ES_CHAT_ID", "0"))
+    raise ValueError("BOT_TOKEN not set")
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
+# In-memory user data (for demo only, replace with DB or JSON in real case)
+user_data = {}
+CHANNEL_LINK = "https://t.me/your_private_channel"
+PAYPAL_URL = "https://paypal.me/yourlink"
+ADMIN_USERNAME = "Linavibeart"
 
-# --- клавиатура ---
-def kb_lang() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Войти в канал 🇷🇺", callback_data="join_ru")],
-            [InlineKeyboardButton(text="Entrar al canal 🇪🇸", callback_data="join_es")],
-        ]
-    )
+# Language options
+def language_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Русский", callback_data="lang_ru")],
+        [InlineKeyboardButton(text="Español", callback_data="lang_es")]
+    ])
 
+# Start command
+dp.message(CommandStart())
+async def start(message: Message):
+    await message.answer("Please choose your language / Por favor, elige el idioma", reply_markup=language_keyboard())
 
-# --- handlers ---
-@dp.message(Command("start"))
-async def start(m: Message):
-    await m.answer(
-        "Привет! Выбери канал/язык 👇\n¡Hola! Elige tu canal/idioma 👇",
-        reply_markup=kb_lang(),
-    )
+# Welcome keyboards
+def main_menu(lang):
+    text_pay = "💳 Pay" if lang == "en" else "Оплатить"
+    text_more = "ℹ️ Learn More" if lang == "en" else "Узнать больше"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=text_pay, callback_data="pay")],
+        [InlineKeyboardButton(text=text_more, callback_data="more")]
+    ])
 
+# After video keyboard
+def after_video_keyboard(lang):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Pay", callback_data="pay")],
+        [InlineKeyboardButton(text="❓ Have questions?", url=f"https://t.me/{ADMIN_USERNAME}")]
+    ])
 
-@dp.callback_query(F.data == "join_ru")
-async def join_ru(cq):
-    await cq.answer("Подача заявки принята, ожидайте проверки.", show_alert=False)
-    await cq.message.answer("Подай заявку на вступление в RU-канал — бот одобрит после проверки.")
+# Language selection
+dp.callback_query(F.data.startswith("lang_"))
+async def set_language(callback: CallbackQuery):
+    lang = callback.data.split("_")[1]
+    user_data[callback.from_user.id] = {
+        "lang": lang,
+        "subscribed": False,
+        "subscription_expires": None
+    }
+    greeting = {
+        "ru": "👋 Привет! Я — помощник Лины 😊\nРад, что ты здесь — осталось совсем нем043d043eг043e, чтобы попасть в закрытое сообщество, гд0435 учатс044f с043d0438м0430т044c в0438д0435043e и ф043eт043e, к043eт043e04400435 ц0435п043b044fю0442 🎥✨\n\nВн0443т04400438 т0435б044f жд0451т:\n✅ П043e04340440043e0431043d044b0435 р0430з0431043e0440044b п044004350434043c04350442043d044b0445 в043804340435043e\n✅ К04400443043f043d044b0435 р04350430043b044c043d044b0435 п0440043e0435043a0442044b\n✅ П04400430043a04420438044704350441к04380435 с043e043204350442044b п043e с044a0451м043a0435 и с04320435т0443\n✅ М0438043d0438-ур043e043a0438 и п043e043b04350437043d044b0435 «п043b044e0448043a0438»\n✅ Р0430з0431043e0440044b в043804340435043e р04300437043d043e0439 с043b043e0436043d043e044104420438 — о0442 п0440043e04410442044b0445 д043e п0440043e043404320438043d04430442044b0445\n\n💰 П043e0434043f0438ск0430 — в0441ег043e 15 ев0440043e в м04350441044f0446\nП043e0441043b0435 о043f043b04300442044b т044b с0440043004370443 п043e043b0443ч0438ш044c д043e044104420443043f в з0430к0440ыт044b0439 к0430043d0430043b с у0440043e043a0430043c0438 и м0430т0435044004380430043b0430043c0438 🔐\n\n🚀 Г043e0442043e0432 н0430044704300442044c? К043d043e043f043a0438 н043804360435 👇",
+        "es": "👋 ¡Hola! Soy el asistente de Lina. Accede al canal privado con contenido exclusivo. ¡Haz clic en los botones abajo!"
+    }.get(lang, "👋 Welcome! Click the buttons below to continue.")
+    await callback.message.answer(greeting, reply_markup=main_menu("en" if lang == "es" else "ru"))
+    await callback.answer()
 
+# Learn more (video)
+dp.callback_query(F.data == "more")
+async def send_video(callback: CallbackQuery):
+    lang = user_data.get(callback.from_user.id, {}).get("lang", "en")
+    video = FSInputFile("video.mp4")  # must be present in project directory
+    caption = {
+        "ru": "🎥 Пр043e0441043c043e044204400438 п044004350432044cю н043004480435г043e к0430043d0430043b0430.",
+        "es": "🎥 Mira una vista previa del canal.",
+    }.get(lang, "🎥 Watch a preview of our channel.")
+    await callback.message.answer_video(video=video, caption=caption, reply_markup=after_video_keyboard(lang))
+    await callback.answer()
 
-@dp.callback_query(F.data == "join_es")
-async def join_es(cq):
-    await cq.answer("Solicitud enviada, espera la verificación.", show_alert=False)
-    await cq.message.answer("Envía solicitud al canal ES — el bot aprobará tras la verificación.")
+# Pay button
+dp.callback_query(F.data == "pay")
+async def pay_step(callback: CallbackQuery):
+    await callback.message.answer(f"Please proceed to payment: {PAYPAL_URL}\nAfter payment, send a screenshot to @{ADMIN_USERNAME} to get access.")
+    await callback.answer()
 
-
-@dp.chat_join_request()
-async def on_join(r: ChatJoinRequest):
-    try:
-        await r.approve()
-        await bot.send_message(
-            r.from_user.id,
-            "Доступ одобрен ✅\nДобро пожаловать!",
-        )
-    except Exception as e:
-        print("join error:", e)
-
-
-# --- keep-alive для Render ---
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
-class _HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-
-def _run_health_server():
-    port = int(os.getenv("PORT", "10000"))
-    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
-    server.serve_forever()
-
-threading.Thread(target=_run_health_server, daemon=True).start()
-
-
-# --- запуск бота ---
-async def main():
-    # Удаляем webhook, чтобы не было конфликта с polling
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Run bot
+async
