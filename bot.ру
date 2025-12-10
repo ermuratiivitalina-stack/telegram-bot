@@ -125,7 +125,6 @@ async def send_faq(callback: CallbackQuery):
     await callback.message.answer(text, reply_markup=faq_keyboard(lang))
     await callback.answer()
 
-# Фото: OCR отключен — даем понятный ответ и направляем в поддержку
 @dp.message_handler(content_types=[ContentType.PHOTO])
 async def photo_stub(message: Message):
     lang = user_data.get(message.from_user.id, {}).get("lang", "ru")
@@ -138,5 +137,4 @@ async def photo_stub(message: Message):
 
 # ========= Entrypoint =========
 if __name__ == "__main__":
-    # Только polling — идеально для Render Background Worker
     executor.start_polling(dp, skip_updates=True)
