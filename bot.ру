@@ -1,141 +1,63 @@
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
-from typing import Dict
-from aiogram import Bot, Dispatcher, executor
-from aiogram.types import (
-    InlineKeyboardMarkup, InlineKeyboardButton,
-    CallbackQuery, Message, ContentType,
-)
 
-# ========= Конфиг =========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("Environment variable BOT_TOKEN is not set")
-
-PAYPAL_URL = os.getenv("PAYPAL_URL", "https://www.paypal.com/qrcodes/p2pqr/3MVJCABCAVKN6")
-SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/Linavibeart")
-CHANNEL_LINKS: Dict[str, str] = {
-    "ru": "https://t.me/+ebPVUZ8dzkwOWU8",
-    "es": "https://t.me/+HPXk4hRDxpMWpWQ0",
-}
-
-# ========= Тексты =========
-FAQ_RU = (
-    "💬 Часто задаваемые вопросы\n\n"
-    "1) ⏳ Сколько действует доступ? — 1 месяц.\n\n"
-    "2) 📚 Есть ли в канале уже материалы? — Да, пополняется 3 раза в неделю.\n\n"
-    "3) 🛟 Есть ли обратная связь? — Да, 2 раза в месяц открываю комментарии.\n\n"
-    "4) 🔒 Не продлил вовремя? — Доступ приостанавливается до продления.\n\n"
-    "5) 💳 Как оплатить/продлить? — Придёт уведомление перед окончанием периода.\n\n"
-    "6) 💸 Возврат? — Не предусмотрен, но можно отменить продление.\n\n"
-    "7) 🧑‍🎓 Подходит ли канал новичкам? — Да, от новичков до продвинутых.\n\n"
-    "8) ⏱️ Можно ли смотреть в удобное время? — Да, материалы остаются в канале.\n\n"
-    "9) ❗Не получил доступ после оплаты? — Напиши в поддержку.\n\n"
-    "❓ Остались вопросы? Нажимай на кнопки ниже."
-)
-FAQ_ES = (
-    "💬 Preguntas frecuentes\n\n"
-    "1) ⏳ ¿Duración del acceso? — 1 mes.\n\n"
-    "2) 📚 ¿Hay contenido ya? — Sí, se actualiza 3 veces por semana.\n\n"
-    "3) 🛟 ¿Hay soporte? — Sí, abro comentarios 2 veces al mes.\n\n"
-    "4) 🔒 Si no renuevo a tiempo, el acceso se pausa hasta renovar.\n\n"
-    "5) 💳 ¿Cómo pagar/renovar? — Recibirás un aviso antes de que termine el período.\n\n"
-    "6) 💸 ¿Reembolso? — No, pero puedes cancelar la renovación.\n\n"
-    "7) 🧑‍🎓 ¿Para principiantes? — Sí, para todos los niveles.\n\n"
-    "8) ⏱️ ¿Ver cuando quieras? — Sí, el contenido permanece en el canal.\n\n"
-    "9) ❗¿Sin acceso tras pagar? — Escribe a soporte.\n\n"
-    "❓ ¿Más preguntas? Pulsa los botones abajo."
-)
-
-# ========= Состояние =========
-user_data: Dict[int, Dict] = {}
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# ========= Клавиатуры =========
-def lang_keyboard() -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:ru"))
-    kb.add(InlineKeyboardButton("🇪🇸 Español", callback_data="lang:es"))
-    return kb
-
-def main_keyboard(lang: str) -> InlineKeyboardMarkup:
-    text_watch = "▶️ Смотреть видео" if lang == "ru" else "▶️ Ver video"
-    text_pay = "💳 Оплатить через PayPal" if lang == "ru" else "💳 Pagar con PayPal"
-    text_faq = "❓ Остались вопросы?" if lang == "ru" else "❓ ¿Tienes preguntas?"
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text_watch, url="https://example.com/your-private-video.mp4")],
-        [InlineKeyboardButton(text_pay, url=PAYPAL_URL)],
-        [InlineKeyboardButton(text_faq, callback_data="faq")],
-    ])
-
-def faq_keyboard(lang: str) -> InlineKeyboardMarkup:
-    text_pay = "💳 Оплатить через PayPal" if lang == "ru" else "💳 Pagar con PayPal"
-    text_support = "🆘 Поддержка" if lang == "ru" else "🆘 Soporte"
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text_pay, url=PAYPAL_URL)],
-        [InlineKeyboardButton(text_support, url=SUPPORT_URL)],
-    ])
-
-# ========= Хендлеры =========
-@dp.message_handler(commands=["start"])
-async def cmd_start(message: Message):
-    await message.answer("Выбери язык / Elige el idioma:", reply_markup=lang_keyboard())
-
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("lang:"))
-async def select_lang(callback: CallbackQuery):
-    lang = callback.data.split(":", 1)[1]
-    uid = callback.from_user.id
-    user_data[uid] = user_data.get(uid, {})
-    user_data[uid]["lang"] = lang
-
-    if lang == "ru":
-        greeting = (
-            "👋 Привет! Я — помощник Лины\n\n"
-            "Внутри тебя ждёт:\n"
-            "✅ Подробные разборы предметных видео\n"
-            "✅ Реальные проекты\n"
-            "✅ Практические советы по съёмке и свету\n"
-            "✅ Мини-уроки и полезные «плюшки»\n"
-            "💶 Подписка — всего 15 евро в месяц\n"
-            "📦 После оплаты ты сразу получишь доступ в закрытый канал с уроками и материалами\n\n"
-            "🚀 Готов начать? Кнопки ниже ⬇️"
-        )
-    else:
-        greeting = (
-            "👋 ¡Hola! Soy el asistente de Lina\n\n"
-            "Dentro te espera:\n"
-            "✅ Contenido exclusivo\n"
-            "✅ Análisis detallado de videos\n"
-            "✅ Proyectos reales\n"
-            "✅ Consejos prácticos sobre iluminación\n"
-            "✅ Mini-lecciones y bonus\n"
-            "💶 Suscripción: solo 15 € al mes\n"
-            "📦 Acceso al canal privado después del pago\n\n"
-            "🚀 ¿Listo para empezar? Botones abajo ⬇️"
-        )
-
-    await callback.message.edit_text(greeting, reply_markup=main_keyboard(lang))
-    await callback.answer()
-
-@dp.callback_query_handler(lambda c: c.data == "faq")
-async def send_faq(callback: CallbackQuery):
-    uid = callback.from_user.id
-    lang = user_data.get(uid, {}).get("lang", "ru")
-    text = FAQ_RU if lang == "ru" else FAQ_ES
-    await callback.message.answer(text, reply_markup=faq_keyboard(lang))
-    await callback.answer()
-
-@dp.message_handler(content_types=[ContentType.PHOTO])
-async def photo_stub(message: Message):
-    lang = user_data.get(message.from_user.id, {}).get("lang", "ru")
-    text = (
-        "ℹ️ Сейчас бот работает без распознавания скриншотов. Напиши в поддержку или пришли ID/квитанцию платежа."
-        if lang == "ru" else
-        "ℹ️ El bot funciona sin OCR por ahora. Escribe a soporte o envía el ID/recibo del pago."
+@dp.message_handler(commands=['start'])
+async def start_cmd(message: types.Message):
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        InlineKeyboardButton("Русский 🇷🇺", callback_data='lang_ru'),
+        InlineKeyboardButton("Español 🇪🇸", callback_data='lang_es')
     )
-    await message.answer(text)
+    await message.answer("Выберите язык / Choose language", reply_markup=keyboard)
 
-# ========= Entrypoint =========
-if __name__ == "__main__":
-    print("Starting polling…")  # подсказка в логах
+@dp.callback_query_handler(lambda c: c.data.startswith('lang_'))
+async def select_language(callback_query: types.CallbackQuery):
+    lang = callback_query.data.split('_')[1]
+    welcome_text = {
+        'ru': "Привет! Добро пожаловать!",
+        'es': "¡Hola! ¡Bienvenido!"
+    }
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        InlineKeyboardButton("Хочу купить 💳", url="https://t.me/Linavibeart"),
+        InlineKeyboardButton("Узнать больше ℹ️", callback_data='more_info')
+    )
+    await callback_query.message.answer(welcome_text.get(lang, "Welcome!"), reply_markup=keyboard)
+    await callback_query.answer()
+
+@dp.callback_query_handler(lambda c: c.data == 'more_info')
+async def more_info(callback_query: types.CallbackQuery):
+    promo_video = "https://example.com/promo.mp4"  # Replace with actual video URL or use send_video
+    await callback_query.message.answer("🎥 Промо ролик:", disable_web_page_preview=True)
+    await callback_query.message.answer(promo_video)
+
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        InlineKeyboardButton("Хочу купить 💳", url="https://t.me/Linavibeart"),
+        InlineKeyboardButton("Остались вопросы ❓", callback_data='faq')
+    )
+    await callback_query.message.answer("Что дальше?", reply_markup=keyboard)
+    await callback_query.answer()
+
+@dp.callback_query_handler(lambda c: c.data == 'faq')
+async def faq(callback_query: types.CallbackQuery):
+    faq_text = (
+        "❓ Часто задаваемые вопросы:\n\n"
+        "1. Как купить доступ?\n"
+        "2. Что входит в подписку?\n"
+        "3. Можно ли отменить подписку?\n"
+        "4. Как связаться с поддержкой?\n"
+    )
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("Поддержка 📨", url="https://t.me/Linavibeart"))
+    await callback_query.message.answer(faq_text, reply_markup=keyboard)
+    await callback_query.answer()
+
+if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
